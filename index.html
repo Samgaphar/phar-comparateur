@@ -185,17 +185,21 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .fish-action-btn:hover{background:var(--blue-light);border-color:rgba(64,80,200,.4);}
 
 /* LOSS GRID */
-.loss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px;}
+.loss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:6px;}
 .loss-item{
   background:white;border:1px solid var(--warm-200);
-  border-radius:var(--r);padding:8px 14px;
-  display:grid;
-  grid-template-columns:1fr 52px 60px 1px 58px;
-  align-items:center;gap:10px;
+  border-radius:var(--r);padding:9px 14px;
+  display:flex;align-items:center;
+  gap:12px;
   transition:border-color .15s,box-shadow .15s;
 }
 .loss-item:focus-within{border-color:var(--blue-mid);box-shadow:0 0 0 3px rgba(64,80,200,.07);}
-.loss-name{font-size:.82rem;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.loss-name{
+  flex:1;min-width:0;
+  font-size:.84rem;font-weight:600;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.loss-right{display:flex;align-items:center;gap:8px;flex-shrink:0;}
 .loss-input-num{
   width:52px;padding:5px 8px;
   background:var(--warm-50);border:1px solid var(--warm-200);
@@ -205,8 +209,14 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 }
 .loss-input-num:focus{outline:none;border-color:var(--blue-mid);background:white;}
 .loss-pct-label{font-size:.72rem;color:var(--ink-4);white-space:nowrap;}
-.loss-sep{width:1px;height:14px;background:var(--warm-200);justify-self:center;}
-.loss-rend-val{font-size:.75rem;font-weight:700;color:var(--win);white-space:nowrap;text-align:right;}
+.loss-sep{width:1px;height:14px;background:var(--warm-200);flex-shrink:0;}
+.loss-rend-val{
+  font-size:.74rem;font-weight:700;color:var(--win);
+  background:var(--win-bg);border:1px solid var(--win-border);
+  padding:2px 9px;border-radius:10px;
+  white-space:nowrap;min-width:62px;text-align:center;
+}
+.loss-rend-val.low-rdt{color:var(--warn);background:var(--warn-bg);border-color:#F0D080;}
 .loss-empty{color:var(--ink-4);font-size:.82rem;font-style:italic;padding:.5rem 0;grid-column:1/-1;}
 
 /* SUPPLIER TRACK */
@@ -722,12 +732,14 @@ function buildLossGrid() {
     const rend = 100 - loss;
     return `<div class="loss-item">
       <span class="loss-name" title="${f.name}">${f.name}</span>
-      <input class="loss-input-num" type="number" id="loss-${id}"
-        value="${loss}" min="0" max="99" step="1"
-        oninput="lossRates['${id}']=Math.min(99,Math.max(0,parseFloat(this.value)||0));updateLossPreview('${id}')"/>
-      <span class="loss-pct-label">% perte</span>
-      <span class="loss-sep"></span>
-      <span class="loss-rend-val" id="rend-${id}">Rdt ${rend}%</span>
+      <div class="loss-right">
+        <input class="loss-input-num" type="number" id="loss-${id}"
+          value="${loss}" min="0" max="99" step="1"
+          oninput="lossRates['${id}']=Math.min(99,Math.max(0,parseFloat(this.value)||0));updateLossPreview('${id}')"/>
+        <span class="loss-pct-label">% perte</span>
+        <span class="loss-sep"></span>
+        <span class="loss-rend-val" id="rend-${id}">Rdt ${rend}%</span>
+      </div>
     </div>`;
   }).join('');
 }
