@@ -108,15 +108,13 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
   display:flex;align-items:center;gap:8px;
   padding:9px 13px;
   background:var(--warm-50);border:1px solid var(--warm-200);
-  border-radius:var(--r);cursor:pointer;
+  border-radius:var(--r);
   transition:border-color .15s,box-shadow .15s;
-  user-select:none;
 }
-.fish-search-box:hover{border-color:var(--blue-mid);}
 .fish-search-box.open{border-color:var(--blue-mid);box-shadow:0 0 0 3px rgba(64,80,200,.08);background:white;border-bottom-left-radius:0;border-bottom-right-radius:0;}
-.fish-search-input{flex:1;border:none;background:transparent;font-family:var(--font-b);font-size:.88rem;color:var(--ink);outline:none;min-width:0;}
+.fish-search-input{flex:1;border:none;background:transparent;font-family:var(--font-b);font-size:.88rem;color:var(--ink);outline:none;min-width:0;cursor:text;}
 .fish-search-input::placeholder{color:var(--ink-4);}
-.fish-chevron{color:var(--ink-4);font-size:.7rem;transition:transform .2s;flex-shrink:0;}
+.fish-chevron{color:var(--ink-4);font-size:.7rem;transition:transform .2s;flex-shrink:0;cursor:pointer;padding:4px;}
 .fish-chevron.open{transform:rotate(180deg);}
 
 .fish-dropdown{
@@ -149,60 +147,66 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .fish-dropdown-item:hover{background:var(--blue-pale);}
 .fish-dropdown-item.selected{background:var(--blue-light);}
 .fish-dropdown-item input[type=checkbox]{
-  width:15px;height:15px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;
+  width:14px;height:14px;accent-color:var(--blue);cursor:pointer;flex-shrink:0;
 }
-.fish-dropdown-item .fish-emoji{font-size:1rem;width:24px;text-align:center;flex-shrink:0;}
-.fish-dropdown-item .fish-name{flex:1;color:var(--ink);}
-.fish-dropdown-item .fish-loss-preview{font-size:.72rem;color:var(--ink-4);}
+.fish-item-name{flex:1;color:var(--ink);font-weight:500;font-size:.84rem;}
+.fish-item-rdt{
+  font-size:.7rem;font-weight:700;color:var(--win);
+  background:var(--win-bg);border:1px solid var(--win-border);
+  padding:2px 8px;border-radius:10px;white-space:nowrap;
+}
+.fish-item-rdt.low{color:var(--warn);background:var(--warn-bg);border-color:#F0D080;}
 
 /* Selected tags */
 .fish-tags{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:0;}
 .fish-tag{
-  display:inline-flex;align-items:center;gap:5px;
+  display:inline-flex;align-items:center;gap:4px;
   background:var(--blue-light);color:var(--blue);
   border:1px solid rgba(64,80,200,.2);
-  padding:3px 9px;border-radius:20px;
+  padding:3px 8px 3px 10px;border-radius:20px;
   font-size:.72rem;font-weight:600;
 }
-.fish-tag-emoji{font-size:.85rem;}
-.fish-tag-remove{cursor:pointer;opacity:.5;font-size:.7rem;transition:opacity .15s;}
+.fish-tag-remove{cursor:pointer;opacity:.4;font-size:.65rem;margin-left:2px;transition:opacity .15s;line-height:1;}
 .fish-tag-remove:hover{opacity:1;}
 
-/* Select all / clear */
 .fish-actions{
-  display:flex;gap:8px;padding:8px 12px;
-  border-bottom:1px solid var(--warm-100);
-  background:var(--warm-50);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:8px 14px;border-bottom:1px solid var(--warm-100);background:var(--warm-50);
+  position:sticky;top:0;z-index:2;
 }
+.fish-sel-count{font-size:.72rem;color:var(--ink-4);font-weight:500;}
+.fish-actions-right{display:flex;gap:4px;}
 .fish-action-btn{
-  font-size:.7rem;font-weight:600;color:var(--blue);
-  background:none;border:none;cursor:pointer;padding:2px 0;
-  text-decoration:underline;text-underline-offset:2px;
+  font-size:.72rem;font-weight:700;color:var(--blue);
+  background:none;border:1px solid rgba(64,80,200,.2);
+  border-radius:5px;cursor:pointer;padding:3px 9px;
+  transition:background .15s,border-color .15s;
 }
-.fish-action-btn:hover{color:var(--navy);}
+.fish-action-btn:hover{background:var(--blue-light);border-color:rgba(64,80,200,.4);}
 
 /* LOSS GRID */
-.loss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:4px;}
+.loss-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:6px;}
 .loss-item{
-  background:var(--warm-50);border:1px solid var(--warm-200);
-  border-radius:var(--r);padding:10px 12px;
-  display:flex;align-items:center;gap:10px;
-  transition:border-color .15s;
-}
-.loss-item:focus-within{border-color:var(--blue-mid);background:white;}
-.loss-emoji{font-size:1.3rem;flex-shrink:0;}
-.loss-name{font-size:.78rem;font-weight:600;color:var(--ink-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.loss-rend{font-size:.65rem;color:var(--win);font-weight:600;margin-top:1px;}
-.loss-input-wrap{display:flex;align-items:center;gap:3px;flex-shrink:0;}
-.loss-input-wrap input{
-  width:46px;padding:4px 6px;
   background:white;border:1px solid var(--warm-200);
-  border-radius:6px;font-family:var(--font-b);font-size:.82rem;
+  border-radius:var(--r);padding:8px 14px;
+  display:grid;
+  grid-template-columns:1fr 52px 60px 1px 58px;
+  align-items:center;gap:10px;
+  transition:border-color .15s,box-shadow .15s;
+}
+.loss-item:focus-within{border-color:var(--blue-mid);box-shadow:0 0 0 3px rgba(64,80,200,.07);}
+.loss-name{font-size:.82rem;font-weight:600;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.loss-input-num{
+  width:52px;padding:5px 8px;
+  background:var(--warm-50);border:1px solid var(--warm-200);
+  border-radius:6px;font-family:var(--font-b);font-size:.85rem;
   font-weight:700;color:var(--blue);text-align:center;
   transition:border-color .15s;
 }
-.loss-input-wrap input:focus{outline:none;border-color:var(--blue-mid);}
-.loss-pct{font-size:.72rem;color:var(--ink-4);}
+.loss-input-num:focus{outline:none;border-color:var(--blue-mid);background:white;}
+.loss-pct-label{font-size:.72rem;color:var(--ink-4);white-space:nowrap;}
+.loss-sep{width:1px;height:14px;background:var(--warm-200);justify-self:center;}
+.loss-rend-val{font-size:.75rem;font-weight:700;color:var(--win);white-space:nowrap;text-align:right;}
 .loss-empty{color:var(--ink-4);font-size:.82rem;font-style:italic;padding:.5rem 0;grid-column:1/-1;}
 
 /* SUPPLIER TRACK */
@@ -392,14 +396,22 @@ td.eco-cell{font-size:.78rem;font-weight:700;color:var(--win);font-variant-numer
         <div class="field" style="grid-column:span 3">
           <label>Sélectionner les espèces à comparer</label>
           <div class="fish-selector-wrap">
-            <div class="fish-search-box" id="fish-search-box" onclick="toggleFishDropdown()">
-              <input class="fish-search-input" id="fish-search-input" placeholder="Rechercher une espèce…" oninput="filterFishDropdown(this.value)" onclick="event.stopPropagation()"/>
-              <span class="fish-chevron" id="fish-chevron">▼</span>
+            <div class="fish-search-box" id="fish-search-box">
+              <span class="fish-search-icon">🔍</span>
+              <input class="fish-search-input" id="fish-search-input"
+                placeholder="Rechercher une espèce…"
+                oninput="filterFishDropdown(this.value)"
+                onfocus="openFishDropdown()"
+                autocomplete="off"/>
+              <span class="fish-chevron" id="fish-chevron" onclick="toggleFishDropdown()">▼</span>
             </div>
             <div class="fish-dropdown" id="fish-dropdown">
               <div class="fish-actions">
-                <button class="fish-action-btn" onclick="selectAllFish()">Tout sélectionner</button>
-                <button class="fish-action-btn" onclick="clearAllFish()">Tout effacer</button>
+                <span class="fish-count" id="fish-sel-count">0 sélectionné</span>
+                <div class="fish-actions-btns">
+                  <button class="fish-action-btn" onclick="selectAllFish()">Tout</button>
+                  <button class="fish-action-btn" onclick="clearAllFish()">Effacer</button>
+                </div>
               </div>
               <div id="fish-dropdown-list"></div>
             </div>
@@ -625,16 +637,26 @@ function buildFishDropdown(filter = '') {
     list.innerHTML += `<div class="fish-dropdown-cat">${cat}</div>`;
     items.forEach(f => {
       const sel = selectedFish.has(f.id);
+      const rdt = 100 - (lossRates[f.id] ?? f.loss);
+      const lowRdt = rdt < 30;
       list.innerHTML += `<label class="fish-dropdown-item${sel?' selected':''}" id="dditem-${f.id}">
         <input type="checkbox" ${sel?'checked':''} onchange="toggleFish('${f.id}',this.checked)" onclick="event.stopPropagation()"/>
-        <span class="fish-emoji">${f.emoji}</span>
-        <span class="fish-name">${f.name}</span>
-        <span class="fish-loss-preview">Rdt ${100-lossRates[f.id]}% · perte ${lossRates[f.id]}%</span>
+        <span class="fish-item-name">${f.name}</span>
+        <span class="fish-item-rdt${lowRdt?' low':''}" id="dd-rdt-${f.id}">Rdt ${rdt}%</span>
       </label>`;
     });
   });
+  const c = document.getElementById('fish-sel-count');
+  if (c) c.textContent = `${selectedFish.size} sélectionné${selectedFish.size>1?'s':''}`;
 }
 
+function openFishDropdown() {
+  if (dropdownOpen) return;
+  dropdownOpen = true;
+  document.getElementById('fish-dropdown').classList.add('open');
+  document.getElementById('fish-search-box').classList.add('open');
+  document.getElementById('fish-chevron').classList.add('open');
+}
 function toggleFishDropdown() {
   dropdownOpen = !dropdownOpen;
   document.getElementById('fish-dropdown').classList.toggle('open', dropdownOpen);
@@ -662,6 +684,7 @@ function selectAllFish() {
   buildFishDropdown();
   renderFishTags();
   buildLossGrid();
+  const c=document.getElementById('fish-sel-count');if(c)c.textContent=`${selectedFish.size} sélectionnés`;
 }
 
 function clearAllFish() {
@@ -669,6 +692,7 @@ function clearAllFish() {
   buildFishDropdown();
   renderFishTags();
   buildLossGrid();
+  const c=document.getElementById('fish-sel-count');if(c)c.textContent='0 sélectionné';
 }
 
 function renderFishTags() {
@@ -678,8 +702,8 @@ function renderFishTags() {
     const f = FISH_DB.find(x => x.id === id);
     if (!f) return '';
     return `<span class="fish-tag">
-      <span class="fish-tag-emoji">${f.emoji}</span>${f.name}
-      <span class="fish-tag-remove" onclick="toggleFish('${id}',false);document.getElementById('dditem-${id}')&&(document.getElementById('dditem-${id}').classList.remove('selected'),document.getElementById('dditem-${id}').querySelector('input').checked=false)">✕</span>
+      ${f.name}
+      <span class="fish-tag-remove" onclick="toggleFish('${id}',false);const el=document.getElementById('dditem-${id}');if(el){el.classList.remove('selected');el.querySelector('input').checked=false;}">✕</span>
     </span>`;
   }).join('');
 }
@@ -694,29 +718,29 @@ function buildLossGrid() {
   grid.innerHTML = [...selectedFish].map(id => {
     const f = FISH_DB.find(x => x.id === id);
     if (!f) return '';
-    const rend = 100 - lossRates[id];
+    const loss = lossRates[id] ?? f.loss;
+    const rend = 100 - loss;
     return `<div class="loss-item">
-      <span class="loss-emoji">${f.emoji}</span>
-      <div style="flex:1;min-width:0">
-        <div class="loss-name" title="${f.name}">${f.name}</div>
-        <div class="loss-rend">Rendement : ${rend}%</div>
-      </div>
-      <div class="loss-input-wrap">
-        <input type="number" id="loss-${id}" value="${lossRates[id]}" min="0" max="99" step="1"
-          oninput="lossRates['${id}']=parseFloat(this.value)||0;updateLossPreview('${id}')"/>
-        <span class="loss-pct">% perte</span>
-      </div>
+      <span class="loss-name" title="${f.name}">${f.name}</span>
+      <input class="loss-input-num" type="number" id="loss-${id}"
+        value="${loss}" min="0" max="99" step="1"
+        oninput="lossRates['${id}']=Math.min(99,Math.max(0,parseFloat(this.value)||0));updateLossPreview('${id}')"/>
+      <span class="loss-pct-label">% perte</span>
+      <span class="loss-sep"></span>
+      <span class="loss-rend-val" id="rend-${id}">Rdt ${rend}%</span>
     </div>`;
   }).join('');
 }
 
 function updateLossPreview(id) {
-  const rend = 100 - (lossRates[id]||0);
+  const loss = lossRates[id] ?? 0;
+  const rend = 100 - loss;
+  // Dropdown preview
   const preview = document.querySelector(`#dditem-${id} .fish-loss-preview`);
-  if (preview) preview.textContent = `Rdt ${rend}% · perte ${lossRates[id]}%`;
-  // Update rendement display in loss grid
+  if (preview) preview.textContent = `Rdt ${rend}%`;
+  // Loss grid rendement
   const rendEl = document.getElementById(`rend-${id}`);
-  if (rendEl) rendEl.textContent = `Rendement : ${rend}%`;
+  if (rendEl) rendEl.textContent = `Rdt ${rend}%`;
 }
 
 // Close dropdown on outside click
@@ -1034,11 +1058,7 @@ function renderResults(tab, r, cur, isF) {
   let tb = '<tbody>';
   r.lignes.forEach(l => {
     tb += `<tr><td class="art">`;
-    // Add fish emoji if fish tab
-    if (isF) {
-      const fd = FISH_DB.find(x=>x.name===l.article);
-      tb += `${fd?fd.emoji+' ':''}${l.article}`;
-    } else { tb += l.article; }
+    tb += l.article;
     tb += `</td>`;
     supIds.forEach((id,i) => {
       const col = SUP_PAL[i%SUP_PAL.length], p=l.prix?.[id], isW=l.gagnant===id;
@@ -1067,8 +1087,7 @@ function renderResults(tab, r, cur, isF) {
     } else {
       const rows = wl.map(l=>{
         const p=l.prix?.[f.id], pr=isF?p?.netApresLoss:p?.net, or=p?.origine||'';
-        const fd = isF ? FISH_DB.find(x=>x.name===l.article) : null;
-        return `<tr><td>${fd?fd.emoji+' ':''}${l.article}${or?` <span style="color:var(--ink-4);font-size:.68rem">${or}</span>`:''}</td><td style="color:${col.dk}">${pr!=null?parseFloat(pr).toFixed(2)+' '+cur+'/kg':'—'}</td></tr>`;
+        return `<tr><td>${l.article}${or?` <span style="color:var(--ink-4);font-size:.68rem">${or}</span>`:''}</td><td style="color:${col.dk}">${pr!=null?parseFloat(pr).toFixed(2)+' '+cur+'/kg':'—'}</td></tr>`;
       }).join('');
       bonEl.innerHTML += `<div class="bon-card" style="border-color:${col.bd}"><div class="bon-accent" style="background:linear-gradient(90deg,${col.c},${col.dk})"></div><div class="bon-head"><div class="bon-head-left"><div class="bon-head-avatar" style="background:${col.av};color:${col.dk}">${initials(f.nom)}</div><div class="bon-head-label">${f.nom}</div></div><span class="bon-head-count">${wl.length} référence${wl.length>1?'s':''}</span></div><div class="bon-body"><table class="bon-tbl"><tbody>${rows}</tbody></table><div class="bon-foot"><span class="bon-foot-wk">Semaine ${r.semaine}</span><span class="bon-foot-tot" style="color:${col.dk}">${wl.length} article${wl.length>1?'s':''} à livrer</span></div></div></div>`;
     }
