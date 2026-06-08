@@ -367,7 +367,8 @@ td.eco-cell{font-size:.78rem;font-weight:700;color:var(--win);font-variant-numer
 @media print{.site-header,.tab-bar,.api-strip,.card,.sup-track,.analyze-wrap,.btn-sm{display:none!important;}.results-section{display:block!important;}}
 @media(max-width:800px){.site-header,.tab-bar{padding:0 1rem;}.page{padding:1.25rem 1rem;}.res-top{padding:1.25rem;}.kpi-row{flex-wrap:wrap;}}
 </style>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+</script>
 </head>
 <body>
 
@@ -502,13 +503,51 @@ td.eco-cell{font-size:.78rem;font-weight:700;color:var(--win);font-variant-numer
     <div class="card-head"><h3><span class="dot"></span>Configuration de la semaine</h3></div>
     <div class="card-body">
       <div class="cfg-grid">
-        <div class="field"><label>Semaine N°</label><input type="number" id="wk-prim" value="22" min="1" max="53"/></div>
+        <div class="field"><label>Client</label><input type="text" id="client-prim" value="Vaudoise Aréna" placeholder="Nom du client (bon de livraison)"/></div>
+        <div class="field"><label>Semaine N°</label><input type="number" id="wk-prim" value="24" min="1" max="53"/></div>
         <div class="field"><label>Devise</label><select id="cur-prim"><option>CHF</option><option>EUR</option></select></div>
-        <div class="field" style="grid-column:span 3">
-          <label>Liste articles (vide = liste standard ~25 articles)</label>
-          <input type="text" id="prim-list" placeholder="Laisser vide pour la liste standard PHAR"/>
-          <div class="field-hint">Liste standard : tomates, salades, herbes, légumes, PDT, gingembre…</div>
+      </div>
+
+      <div class="field" style="margin-top:1rem">
+        <label>Liste de comparaison standard PHAR</label>
+        <div class="fish-selector-wrap">
+          <div class="fish-search-box" id="prim-search-box">
+            <span class="fish-search-icon">🔍</span>
+            <input class="fish-search-input" id="prim-search-input"
+                   placeholder="Rechercher un article…"
+                   onfocus="openPrimDropdown()" oninput="filterPrimDropdown(this.value)"/>
+            <span class="fish-chevron" id="prim-chevron" onclick="togglePrimDropdown()">▼</span>
+          </div>
+          <div class="fish-dropdown" id="prim-dropdown">
+            <div class="fish-actions">
+              <span class="fish-count" id="prim-sel-count">0 sélectionné</span>
+              <div class="fish-actions-btns">
+                <button class="fish-action-btn" onclick="selectAllPrim()">Tout</button>
+                <button class="fish-action-btn" onclick="clearAllPrim()">Effacer</button>
+              </div>
+            </div>
+            <div id="prim-dropdown-list"></div>
+          </div>
         </div>
+        <div class="fish-tags" id="prim-tags"></div>
+      </div>
+
+      <div class="field" style="margin-top:1rem">
+        <label>Ajouter un article à comparer</label>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+          <input type="text" id="add-prim-name" placeholder="Nom de l'article (ex. Courgette)" style="flex:2;min-width:160px"/>
+          <select id="add-prim-unit" style="flex:1;min-width:120px">
+            <option value="kg">au kilo (kg)</option>
+            <option value="pce">à la pièce</option>
+            <option value="botte">à la botte</option>
+            <option value="paquet">au paquet</option>
+            <option value="sachet">au sachet</option>
+            <option value="bouquet">au bouquet</option>
+          </select>
+          <input type="text" id="add-prim-cat" placeholder="Catégorie (ex. Légumes)" style="flex:1;min-width:120px"/>
+          <button class="fish-action-btn" style="padding:9px 16px" onclick="addPrimArticle()">+ Ajouter</button>
+        </div>
+        <div class="field-hint">L'article ajouté apparaît dans la liste ci-dessus et sera inclus dans la comparaison.</div>
       </div>
     </div>
   </div>
@@ -770,8 +809,95 @@ document.addEventListener('click', e => {
 buildFishDropdown();
 renderFishTags();
 buildLossGrid();
+buildPrimDropdown();
+renderPrimTags();
 
 // ── TABS ──
+// ── SÉLECTEUR PRIMEURS (visuel comme les poissons) ──
+let primDropdownOpen = false;
+function unitBadge(unit) {
+  const lbl = UNIT_LABELS[unit] || unit;
+  const isKg = unit === 'kg';
+  return `<span class="fish-item-rdt${isKg?'':' low'}">${isKg?'/kg':'à la '+lbl}</span>`;
+}
+function buildPrimDropdown(filter = '') {
+  const list = document.getElementById('prim-dropdown-list');
+  const lf = filter.toLowerCase();
+  list.innerHTML = '';
+  const all = allPrimList();
+  const cats = [...new Set(all.map(p => p.cat))];
+  cats.forEach(cat => {
+    const items = all.filter(p => (!lf || p.name.toLowerCase().includes(lf)) && p.cat === cat);
+    if (!items.length) return;
+    list.innerHTML += `<div class="fish-dropdown-cat">${cat}</div>`;
+    items.forEach(p => {
+      const sel = selectedPrim.has(p.id);
+      list.innerHTML += `<label class="fish-dropdown-item${sel?' selected':''}" id="ppitem-${p.id}">
+        <input type="checkbox" ${sel?'checked':''} onchange="togglePrim('${p.id}',this.checked)"/>
+        <span class="fish-item-name">${p.name}</span>
+        ${unitBadge(primUnits[p.id]||p.unit)}
+      </label>`;
+    });
+  });
+  updatePrimCount();
+}
+function updatePrimCount() {
+  const c = document.getElementById('prim-sel-count');
+  if (c) c.textContent = `${selectedPrim.size} sélectionné${selectedPrim.size>1?'s':''}`;
+}
+function openPrimDropdown() {
+  primDropdownOpen = true;
+  document.getElementById('prim-dropdown').classList.add('open');
+  document.getElementById('prim-search-box').classList.add('open');
+  document.getElementById('prim-chevron').classList.add('open');
+}
+function togglePrimDropdown() {
+  primDropdownOpen = !primDropdownOpen;
+  document.getElementById('prim-dropdown').classList.toggle('open', primDropdownOpen);
+  document.getElementById('prim-search-box').classList.toggle('open', primDropdownOpen);
+  document.getElementById('prim-chevron').classList.toggle('open', primDropdownOpen);
+  if (primDropdownOpen) document.getElementById('prim-search-input').focus();
+}
+function filterPrimDropdown(val) { openPrimDropdown(); buildPrimDropdown(val); }
+function togglePrim(id, checked) {
+  if (checked) selectedPrim.add(id); else selectedPrim.delete(id);
+  const el = document.getElementById('ppitem-'+id);
+  if (el) el.classList.toggle('selected', checked);
+  renderPrimTags(); updatePrimCount();
+}
+function selectAllPrim() {
+  allPrimList().forEach(p => selectedPrim.add(p.id));
+  buildPrimDropdown(document.getElementById('prim-search-input').value);
+  renderPrimTags();
+}
+function clearAllPrim() {
+  selectedPrim.clear();
+  buildPrimDropdown(document.getElementById('prim-search-input').value);
+  renderPrimTags();
+}
+function renderPrimTags() {
+  const wrap = document.getElementById('prim-tags');
+  wrap.innerHTML = '';
+  [...selectedPrim].forEach(id => {
+    const p = primById(id); if (!p) return;
+    const u = primUnits[id] || p.unit;
+    wrap.innerHTML += `<span class="fish-tag">${p.name}<span style="opacity:.55;font-size:.9em">· ${u==='kg'?'kg':UNIT_LABELS[u]||u}</span><span class="fish-tag-remove" onclick="togglePrim('${id}',false)">✕</span></span>`;
+  });
+}
+function addPrimArticle() {
+  const name = document.getElementById('add-prim-name').value.trim();
+  if (!name) { alert('Indiquez un nom d\'article.'); return; }
+  const unit = document.getElementById('add-prim-unit').value;
+  const cat = document.getElementById('add-prim-cat').value.trim() || 'Autres';
+  const id = 'cust-' + name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'') + '-' + Date.now().toString(36);
+  customPrim[id] = { id, name, cat, unit };
+  primUnits[id] = unit;
+  selectedPrim.add(id);
+  document.getElementById('add-prim-name').value = '';
+  document.getElementById('add-prim-cat').value = '';
+  buildPrimDropdown(); renderPrimTags();
+}
+
 function switchTab(t) {
   document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -791,7 +917,50 @@ const SUP_PAL = [
   {c:'#6530C8',bg:'#F0EBF9',bd:'#C0A0E8',av:'#DBC8F5',dk:'#4020A0'},
 ];
 
-const STD_PRIMEURS = "tomates grappes, tomate cherry grappe, lollo rouge, lollo verte, batavia, iceberg, roquette, rampon, oignons rouge, oignons blanc, oignons nouveaux, carotte, céleri branche, persil, ciboulette, estragon, basilic, menthe, céleri boule, concombre, gingembre, citronnelle, PDT grenaille, PDT agria grosses";
+// ── BASE ARTICLES PRIMEURS PHAR (liste standard, éditable comme les poissons) ──
+// unit: 'kg' = comparable au kilo | 'pce'/'botte'/'paquet'/'sachet'/'bâton' = à la pièce (non comparable au kg)
+const PRIM_DB = [
+  // ── Tomates ──
+  { id:'tom-grappe',    name:'Tomate grappe',            cat:'Tomates',            unit:'kg'  },
+  { id:'tom-cherry',    name:'Tomate cherry grappe',     cat:'Tomates',            unit:'kg'  },
+  // ── Salades ──
+  { id:'lollo-rouge',   name:'Lollo rouge',              cat:'Salades',            unit:'kg'  },
+  { id:'lollo-verte',   name:'Lollo verte',              cat:'Salades',            unit:'kg'  },
+  { id:'batavia',       name:'Batavia',                  cat:'Salades',            unit:'pce' },
+  { id:'iceberg',       name:'Iceberg',                  cat:'Salades',            unit:'pce' },
+  { id:'roquette',      name:'Roquette',                 cat:'Salades',            unit:'kg'  },
+  { id:'rampon',        name:'Rampon / Mâche',           cat:'Salades',            unit:'kg'  },
+  // ── Oignons ──
+  { id:'oignon-rouge',  name:'Oignon rouge',             cat:'Oignons',            unit:'kg'  },
+  { id:'oignon-blanc',  name:'Oignon blanc',             cat:'Oignons',            unit:'kg'  },
+  { id:'oignon-nouv',   name:'Oignons nouveaux / cébettes', cat:'Oignons',         unit:'pce' },
+  // ── Légumes ──
+  { id:'carotte',       name:'Carotte',                  cat:'Légumes',            unit:'kg'  },
+  { id:'celeri-branche',name:'Céleri branche',           cat:'Légumes',            unit:'kg'  },
+  { id:'celeri-boule',  name:'Céleri boule / pomme',     cat:'Légumes',            unit:'kg'  },
+  { id:'persil',        name:'Persil',                   cat:'Légumes',            unit:'kg'  },
+  { id:'concombre',     name:'Concombre',                cat:'Légumes',            unit:'pce' },
+  { id:'gingembre',     name:'Gingembre',                cat:'Légumes',            unit:'kg'  },
+  { id:'citronnelle',   name:'Citronnelle',              cat:'Légumes',            unit:'botte' },
+  // ── Herbes aromatiques ──
+  { id:'ciboulette',    name:'Ciboulette',               cat:'Herbes aromatiques', unit:'botte' },
+  { id:'estragon',      name:'Estragon',                 cat:'Herbes aromatiques', unit:'sachet' },
+  { id:'basilic',       name:'Basilic',                  cat:'Herbes aromatiques', unit:'kg'  },
+  { id:'menthe',        name:'Menthe',                   cat:'Herbes aromatiques', unit:'kg'  },
+  // ── Pommes de terre ──
+  { id:'pdt-grenaille', name:'PDT grenaille',            cat:'Pommes de terre',    unit:'kg'  },
+  { id:'pdt-agria',     name:'PDT agria grosses',        cat:'Pommes de terre',    unit:'kg'  },
+];
+const PRIM_CATS = [...new Set(PRIM_DB.map(p => p.cat))];
+const UNIT_LABELS = { kg:'kg', pce:'pièce', botte:'botte', paquet:'paquet', sachet:'sachet', 'bâton':'bâton', bouquet:'bouquet' };
+// Sélection par défaut = toute la liste standard
+const DEFAULT_PRIM = PRIM_DB.map(p => p.id);
+// State (Map id -> {name, unit, custom}) pour gérer les ajouts d'articles
+const selectedPrim = new Set(DEFAULT_PRIM);
+const primUnits = {}; PRIM_DB.forEach(p => primUnits[p.id] = p.unit);
+const customPrim = {}; // id -> {name, cat, unit} pour les articles ajoutés à la volée
+function allPrimList() { return [...PRIM_DB, ...Object.values(customPrim)]; }
+function primById(id) { return allPrimList().find(p => p.id === id); }
 
 const suppliers = { fish:[], prim:[] };
 const uploaded = {};
@@ -961,28 +1130,51 @@ RÉPONDS EN JSON VALIDE UNIQUEMENT (aucun markdown, aucun texte):
 {"semaine":${w},"fournisseurs":[${sups.map((s,i)=>`{"id":"${String.fromCharCode(65+i)}","nom":"${s.name}"}`).join(',')}],"lignes":[{"article":"Saumon","noArticleA":"REF-001","noArticleB":"SAU-42","prix":{"A":{"brut":18.50,"net":16.65,"netApresLoss":23.79,"origine":"NO"},"B":{"brut":17.00,"net":15.30,"netApresLoss":21.86,"origine":"NO"}},"tauxPerte":30,"gagnant":"B","economiePct":8.1,"alerte":null}],"alertes":[],"scoreParFournisseur":{"A":5,"B":8}}`;
 }
 
-function primPrompt(sups, texts, w, cur, custom) {
-  const art = custom.trim() || STD_PRIMEURS;
-  const sl = sups.map((s,i)=>`  - ${String.fromCharCode(65+i)} (${s.name}): Ristourne ${s.ristourne}% · Rabais ${s.rabais}%`).join('\n');
-  const db = sups.map((s,i)=>`=== ${s.name} ===\n${texts[i]}`).join('\n\n');
-  return `Tu es expert en achats restauration professionnelle. Compare ${sups.length} fournisseurs pour les primeurs.
+function primPrompt(sups, texts, w, cur) {
+  const arts = [...selectedPrim].map(id => { const p = primById(id); return p ? `${p.name} [${UNIT_LABELS[primUnits[id]||p.unit]||(primUnits[id]||p.unit)}]` : null; }).filter(Boolean);
+  const artLines = arts.map(a => `  - ${a}`).join('\n');
+  const sl = sups.map((s,i)=>`  - ${String.fromCharCode(65+i)} = ${s.name} : ristourne ${s.ristourne}%`).join('\n');
+  const db = sups.map((s,i)=>`=== FOURNISSEUR ${String.fromCharCode(65+i)} : ${s.name} ===\n${texts[i]}`).join('\n\n');
+  return `Tu es l'expert achats primeurs de PHAR (restauration professionnelle). Tu compares ${sups.length} fournisseurs article par article. La rigueur prime : un mauvais rapprochement (mauvais article, mauvaise origine, mauvaise unite) est une erreur grave.
 
 SEMAINE: ${w} | DEVISE: ${cur}
-FOURNISSEURS:\n${sl}
-ARTICLES: ${art}
+FOURNISSEURS:
+${sl}
 
-RÈGLES:
-1. Comparer UNIQUEMENT les articles vendus AU KG
-2. Prix net = Prix brut × (1-ristourne/100) × (1-rabais/100)
-3. Origines différentes → alerte
-4. Gagnant = prix net le plus bas
-5. Normaliser: Suisse→CH, Hollande→NL, Espagne→ES, Italie→IT, France→FR
-6. Pour chaque article, extraire le numéro/référence article de chaque fournisseur (noArticleA, noArticleB...) — utiliser "N/D" si absent
+ARTICLES A COMPARER (avec unite de reference attendue) :
+${artLines}
+
+=== REGLES DE RAPPROCHEMENT (IMPERATIVES) ===
+
+1. MEME ARTICLE : ne rapproche que des references qui designent reellement le meme produit. Ne jamais inventer une equivalence. Si un fournisseur n'a pas l'article -> prix = null pour ce fournisseur ; gagnant = l'autre seulement s'il a un prix au kg valide.
+
+2. MEME UNITE : compare UNIQUEMENT au kilo (CHF/kg).
+   - Chez Roduit, le prix au kg correspond aux designations finissant par " NET".
+   - Les designations finissant par PIECE, PCE, PAQUET, BOUQUET, BOTTE, SACHET, BATON = vendu a la piece/botte/etc. -> NON comparable au kg.
+   - Si l'article est vendu a la piece/botte chez UN OU LES DEUX fournisseurs -> ne calcule PAS de gagnant : brut/net/origine = null des deux cotes, gagnant = null, et explique dans "remarque" (ex. "Vendu a la piece chez les deux fournisseurs - non comparable au kg"). Renseigne quand meme la designation reelle (champ "des") de chaque fournisseur.
+
+3. MEME ORIGINE - REGLE CENTRALE :
+   - Compare en priorite des references de MEME origine. Si LGF et Roduit ont tous deux une origine CH ET tous deux une origine etrangere pour le meme article (ex. tomate grappe CH + tomate grappe etrangere chez chacun), produis DEUX lignes : "Tomate grappe (CH)" comparant les deux CH entre elles, et "Tomate grappe (import)" comparant les deux etrangeres entre elles.
+   - Si les origines different et qu'il n'existe pas d'equivalent de meme origine (ex. LGF=CH seulement, Roduit=NL seulement) : tu PEUX indiquer le gagnant par prix net, MAIS tu DOIS le signaler dans "remarque" : "Origines differentes : CH (LGF) vs NL (Roduit)". Ne masque jamais une difference d'origine.
+   - Normalise : Suisse->CH, Hollande->NL, Espagne->ES, Italie->IT, France->FR, Chine->CN, Thailande->TH, Egypte->EG, Maroc->MA, Chili->CL. "Import"/"Etranger" sans pays -> "Import".
+
+4. PRIX NET = prix brut x (1 - ristourne/100). Arrondi a 2 decimales.
+
+5. GAGNANT = prix NET au kg le plus bas, UNIQUEMENT entre references reellement comparables (meme article, unite kg). Jamais de gagnant si l'un des deux est a la piece ou absent.
+
+6. Ne pars PAS du principe qu'un fournisseur est systematiquement moins cher. Chaque ligne se tranche sur ses chiffres reels. Si tu observes que LGF gagne sur (presque) tout, c'est probablement une erreur de rapprochement : reverifie unites et origines. (Constat habituel PHAR : Roduit gagne sur la majorite ; LGF gagne surtout sur iceberg, rampon, gingembre, basilic, menthe, citronnelle.)
+
+7. Cherche les references au-dela de la colonne "Comparatif" (oui/non) : une reference valable au kg peut exister ailleurs dans les donnees.
+
+8. Pour chaque fournisseur et chaque ligne : extrais le N de reference/code article (noArticleA, noArticleB...), l'origine, et la designation EXACTE telle qu'ecrite chez le fournisseur (champ "des"). "N/D" si absent.
+
+DONNEES BRUTES DES FOURNISSEURS :
 
 ${db}
 
-RÉPONDS EN JSON VALIDE UNIQUEMENT:
-{"semaine":${w},"fournisseurs":[${sups.map((s,i)=>`{"id":"${String.fromCharCode(65+i)}","nom":"${s.name}"}`).join(',')}],"lignes":[{"article":"Tomates grappes","noArticleA":"TOM-001","noArticleB":"1234","prix":{"A":{"brut":3.20,"net":2.88,"origine":"ES"},"B":{"brut":3.50,"net":3.15,"origine":"ES"}},"gagnant":"A","economiePct":8.6,"alerte":null}],"alertes":[],"scoreParFournisseur":{"A":12,"B":8}}`;
+REPONDS EN JSON VALIDE UNIQUEMENT (aucun texte hors JSON, pas de balises markdown). "categorie" = rayon (Tomates, Salades, Oignons, Legumes, Herbes aromatiques, Pommes de terre...). "remarque" = alerte origine/unite ou null.
+
+{"semaine":${w},"fournisseurs":[${sups.map((s,i)=>`{"id":"${String.fromCharCode(65+i)}","nom":"${s.name}"}`).join(',')}],"lignes":[{"article":"Tomate grappe","categorie":"Tomates","noArticleA":"TOM-001","noArticleB":"1234","prix":{"A":{"brut":6.65,"net":6.00,"origine":"CH","des":"Tomate grappe"},"B":{"brut":4.50,"net":4.15,"origine":"NL","des":"TOMATE GRAPPE NET"}},"gagnant":"B","economiePct":30.8,"remarque":"Origines differentes : CH (LGF) vs NL (Roduit)","alerte":"Origines differentes"}],"alertes":[],"scoreParFournisseur":{"A":8,"B":15}}`;
 }
 
 // ── ANALYSIS ──
@@ -993,6 +1185,7 @@ async function runAnalysis(tab) {
   const sups = suppliers[tab];
   if (sups.length < 2) { alert('Ajoutez au moins 2 fournisseurs.'); return; }
   if (isF && selectedFish.size === 0) { alert('Sélectionnez au moins une espèce à comparer.'); return; }
+  if (!isF && selectedPrim.size === 0) { alert('Sélectionnez au moins un article à comparer.'); return; }
   for (let i=0; i<sups.length; i++) {
     if (!uploaded[`${tab}-${i}`]) { alert(`Liste manquante : ${sups[i].name||'Fournisseur '+(i+1)}`); return; }
   }
@@ -1007,12 +1200,12 @@ async function runAnalysis(tab) {
     const texts = await Promise.all(sups.map((_,i)=>readFile(uploaded[`${tab}-${i}`])));
     const prompt = isF
       ? fishPrompt(sups, texts, w, cur)
-      : primPrompt(sups, texts, w, cur, document.getElementById('prim-list').value);
+      : primPrompt(sups, texts, w, cur);
 
     const resp = await fetch('https://api.anthropic.com/v1/messages', {
       method:'POST',
       headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:6000,messages:[{role:'user',content:prompt}]})
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:8000,messages:[{role:'user',content:prompt}]})
     });
     if (!resp.ok) { const e=await resp.json(); throw new Error(e.error?.message||`HTTP ${resp.status}`); }
     const data = await resp.json();
@@ -1120,6 +1313,8 @@ function exportCSV(tab) {
 function exportExcel(tab) {
   const r = results[tab]; if (!r) return;
   if (typeof XLSX === 'undefined') { alert('SheetJS non chargé. Vérifiez votre connexion.'); return; }
+
+  if (tab === 'prim') { exportPrimeursVaudoise(r); return; }
 
   const isF = tab === 'fish';
   const cur = document.getElementById('cur-' + tab).value;
@@ -1302,6 +1497,157 @@ function exportExcel(tab) {
   const filename = `PHAR_S${r.semaine}_${isF?'Poissons':'Primeurs'}_${new Date().toISOString().slice(0,10)}.xlsx`;
   XLSX.writeFile(wb, filename);
 }
+
+// ════════════════════════════════════════════════
+// EXPORT PRIMEURS — FORMAT BON DE LIVRAISON CLIENT
+// (reproduit le format Vaudoise Aréna : comparatif par rayon + bon par fournisseur)
+// ════════════════════════════════════════════════
+function exportPrimeursVaudoise(r) {
+  const cur = document.getElementById('cur-prim').value;
+  const client = (document.getElementById('client-prim').value || '').trim() || 'Client';
+  const ids = r.fournisseurs.map(f => f.id);
+  const nm = {}; r.fournisseurs.forEach(f => nm[f.id] = f.nom);
+  // Identifie LGF / Roduit pour le code couleur (sinon ordre des fournisseurs)
+  const lgfId = ids.find(id => /lgf|legu|riviera/i.test(nm[id])) || ids[0];
+  const rodId = ids.find(id => id !== lgfId) || ids[1] || ids[0];
+  const wb = XLSX.utils.book_new();
+
+  const NAVY='1E2580', WHITE='FFFFFF', GREENH='1A7A52', GREENBG='E8F5EE', GREENWIN='C6EFCE', GREENWINF='0F5438',
+        ORANGEH='C86E1A', ORANGEBG='FDF3E8', CATBG='4050C8', WARNBG='FFFBEC', WARN='9B5010', INK='1A1C2A', GRAYNA='F2EDE3';
+
+  const S = (o)=>o; // helper
+  function fill(bg){return {fgColor:{rgb:bg}};}
+  function border(){return {bottom:{style:'thin',color:{rgb:'E5DDD0'}}};}
+
+  // ───────── ONGLET 1 : COMPARATIF (format Vaudoise) ─────────
+  const data = [];
+  const styles = {}; // "r,c" -> style
+  const merges = [];
+  const setS = (ri,ci,st)=>{ styles[ri+','+ci]=st; };
+
+  // Titre
+  data.push([`COMPARATIF PRIMEURS – SEMAINE ${r.semaine} | ${client.toUpperCase()}`,'','','','','','','','','']);
+  merges.push({s:{r:0,c:0},e:{r:0,c:9}});
+  setS(0,0,{font:{bold:true,sz:13,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'left',vertical:'center'}});
+  // Sous-titre ristournes
+  const ristLgf = (r.fournisseurs.find(f=>f.id===lgfId)||{}).ristourne;
+  data.push([`Ristourne ${nm[lgfId]} : 6%  |  Ristourne ${nm[rodId]} : 5%  |  Prix net = prix brut × (1 − ristourne)`,'','','','','','','','','']);
+  merges.push({s:{r:1,c:0},e:{r:1,c:9}});
+  setS(1,0,{font:{italic:true,sz:9,color:{rgb:INK},name:'Calibri'},fill:fill('EEF0FB'),alignment:{horizontal:'left',vertical:'center'}});
+  // En-têtes
+  const hdr = ['Article',
+    `${nm[lgfId]} – Prix brut\n(${cur}/kg)`,`${nm[lgfId]} – Prix net\n(${cur}/kg)`,`${nm[lgfId]} – Origine`,`${nm[lgfId]} – Désignation`,
+    `${nm[rodId]} – Prix brut\n(${cur}/kg)`,`${nm[rodId]} – Prix net\n(${cur}/kg)`,`${nm[rodId]} – Origine`,`${nm[rodId]} – Désignation`,
+    'Remarques'];
+  data.push(hdr);
+  const hr = 2;
+  hdr.forEach((_,ci)=>{
+    const isLgf = ci>=1 && ci<=4, isRod = ci>=5 && ci<=8;
+    setS(hr,ci,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},
+      fill:fill(isLgf?GREENH:isRod?ORANGEH:NAVY),
+      alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
+  });
+
+  // Regroupe par catégorie en respectant l'ordre d'apparition
+  const cats = [];
+  r.lignes.forEach(l=>{ const c=l.categorie||'Autres'; if(!cats.includes(c)) cats.push(c); });
+
+  let ri = hr+1;
+  cats.forEach(cat=>{
+    // ligne catégorie
+    data.push([cat.toUpperCase(),'','','','','','','','','']);
+    merges.push({s:{r:ri,c:0},e:{r:ri,c:9}});
+    setS(ri,0,{font:{bold:true,sz:10,color:{rgb:WHITE},name:'Calibri'},fill:fill(CATBG),alignment:{horizontal:'left',vertical:'center'}});
+    ri++;
+    r.lignes.filter(l=>(l.categorie||'Autres')===cat).forEach(l=>{
+      const pL=l.prix?.[lgfId]||{}, pR=l.prix?.[rodId]||{};
+      const dash = v => (v==null||v==='')?'—':v;
+      const num  = v => (v==null||v==='')?'—':parseFloat(v);
+      const row = [l.article,
+        num(pL.brut), num(pL.net), dash(pL.origine), dash(pL.des || l['noArticle'+lgfId] || ''),
+        num(pR.brut), num(pR.net), dash(pR.origine), dash(pR.des || l['noArticle'+rodId] || ''),
+        l.remarque || l.alerte || ''];
+      data.push(row);
+      // styles cellules
+      const baseL = {font:{sz:9,color:{rgb:INK},name:'Calibri'},fill:fill(GREENBG),alignment:{vertical:'center'},border:border()};
+      const baseR = {font:{sz:9,color:{rgb:INK},name:'Calibri'},fill:fill(ORANGEBG),alignment:{vertical:'center'},border:border()};
+      setS(ri,0,{font:{bold:true,sz:9,color:{rgb:INK},name:'Calibri'},alignment:{vertical:'center'},border:border()});
+      // LGF cols 1-4
+      [1,2,3,4].forEach(ci=>{
+        const st=JSON.parse(JSON.stringify(baseL));
+        if(ci===1||ci===2){ st.numFmt=`#,##0.00" ${cur}"`; st.alignment.horizontal='right'; }
+        else st.alignment.horizontal = ci===3?'center':'left';
+        setS(ri,ci,st);
+      });
+      [5,6,7,8].forEach(ci=>{
+        const st=JSON.parse(JSON.stringify(baseR));
+        if(ci===5||ci===6){ st.numFmt=`#,##0.00" ${cur}"`; st.alignment.horizontal='right'; }
+        else st.alignment.horizontal = ci===7?'center':'left';
+        setS(ri,ci,st);
+      });
+      // surligne le prix net gagnant
+      if(l.gagnant===lgfId && pL.net!=null) setS(ri,2,{font:{bold:true,sz:9,color:{rgb:GREENWINF},name:'Calibri'},fill:fill(GREENWIN),numFmt:`#,##0.00" ${cur}"`,alignment:{horizontal:'right',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'8ECFB0'}},top:{style:'thin',color:{rgb:'8ECFB0'}}}});
+      if(l.gagnant===rodId && pR.net!=null) setS(ri,6,{font:{bold:true,sz:9,color:{rgb:GREENWINF},name:'Calibri'},fill:fill(GREENWIN),numFmt:`#,##0.00" ${cur}"`,alignment:{horizontal:'right',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'8ECFB0'}},top:{style:'thin',color:{rgb:'8ECFB0'}}}});
+      // remarque
+      if(row[9]) setS(ri,9,{font:{italic:true,sz:8,color:{rgb:WARN},name:'Calibri'},fill:fill(WARNBG),alignment:{horizontal:'left',vertical:'center',wrapText:true},border:border()});
+      else setS(ri,9,{border:border()});
+      ri++;
+    });
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!merges'] = merges;
+  ws['!cols'] = [{wch:26},{wch:11},{wch:11},{wch:9},{wch:30},{wch:11},{wch:11},{wch:9},{wch:32},{wch:42}];
+  const rowHeights = [{hpt:24},{hpt:16},{hpt:30}];
+  ws['!rows'] = rowHeights;
+  // applique styles
+  Object.keys(styles).forEach(k=>{ const [rr,cc]=k.split(',').map(Number); const ref=XLSX.utils.encode_cell({r:rr,c:cc}); if(ws[ref]) ws[ref].s=styles[k]; });
+  XLSX.utils.book_append_sheet(wb, ws, `Comparatif S${r.semaine}`.substring(0,31));
+
+  // ───────── BONS DE LIVRAISON par fournisseur (articles gagnés) ─────────
+  r.fournisseurs.forEach(f=>{
+    const wl = r.lignes.filter(l=>l.gagnant===f.id);
+    const bd=[]; const bm=[]; const bs={};
+    const setB=(rr,cc,st)=>{bs[rr+','+cc]=st;};
+    bd.push([`BON DE LIVRAISON – ${client.toUpperCase()}`,'','','','']); bm.push({s:{r:0,c:0},e:{r:0,c:4}});
+    setB(0,0,{font:{bold:true,sz:13,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'left',vertical:'center'}});
+    bd.push([`Fournisseur : ${f.nom}   ·   Semaine ${r.semaine}   ·   Généré le ${new Date().toLocaleDateString('fr-CH')}`,'','','','']); bm.push({s:{r:1,c:0},e:{r:1,c:4}});
+    setB(1,0,{font:{italic:true,sz:9,color:{rgb:INK},name:'Calibri'},fill:fill('EEF0FB'),alignment:{horizontal:'left',vertical:'center'}});
+    bd.push(['','','','','']);
+    const bh=['Code article','Désignation','Origine',`Prix net (${cur}/kg)`,'Remarques']; bd.push(bh);
+    bh.forEach((_,ci)=>setB(3,ci,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(GREENH),alignment:{horizontal:'center',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'888888'}}}}));
+    let rr=4;
+    if(!wl.length){
+      bd.push(['—','Aucun article moins cher chez ce fournisseur cette semaine','','','']);
+      bm.push({s:{r:rr,c:1},e:{r:rr,c:4}});
+      setB(rr,1,{font:{italic:true,sz:9,color:{rgb:'A0A2B5'},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'}});
+      rr++;
+    } else {
+      wl.forEach(l=>{
+        const p=l.prix?.[f.id]||{};
+        bd.push([ l['noArticle'+f.id]||'—', p.des||l.article, p.origine||'—', p.net!=null?parseFloat(p.net):'—', l.remarque||'' ]);
+        setB(rr,0,{font:{sz:9,color:{rgb:'6B6D82'},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'},border:border()});
+        setB(rr,1,{font:{bold:true,sz:9,color:{rgb:INK},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'},border:border()});
+        setB(rr,2,{font:{sz:9,color:{rgb:INK},name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:border()});
+        setB(rr,3,{font:{bold:true,sz:9,color:{rgb:GREENWINF},name:'Calibri'},fill:fill(GREENBG),numFmt:`#,##0.00" ${cur}"`,alignment:{horizontal:'right',vertical:'center'},border:border()});
+        if(l.remarque) setB(rr,4,{font:{italic:true,sz:8,color:{rgb:WARN},name:'Calibri'},fill:fill(WARNBG),alignment:{horizontal:'left',vertical:'center',wrapText:true},border:border()});
+        rr++;
+      });
+      bd.push(['',`${wl.length} article${wl.length>1?'s':''} à livrer`,'','','']);
+      bm.push({s:{r:rr,c:1},e:{r:rr,c:2}});
+      setB(rr,1,{font:{bold:true,sz:9,color:{rgb:NAVY},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'}});
+    }
+    const wsb=XLSX.utils.aoa_to_sheet(bd); wsb['!merges']=bm;
+    wsb['!cols']=[{wch:14},{wch:34},{wch:9},{wch:15},{wch:40}];
+    wsb['!rows']=[{hpt:24},{hpt:16},{hpt:6},{hpt:20}];
+    Object.keys(bs).forEach(k=>{const[a,b]=k.split(',').map(Number);const ref=XLSX.utils.encode_cell({r:a,c:b});if(wsb[ref])wsb[ref].s=bs[k];});
+    XLSX.utils.book_append_sheet(wb, wsb, `BL ${f.nom}`.substring(0,31));
+  });
+
+  const safeClient = client.replace(/[^a-zA-Z0-9]+/g,'_');
+  XLSX.writeFile(wb, `PHAR_Primeurs_S${r.semaine}_${safeClient}_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
 </script>
 </body>
 </html>
