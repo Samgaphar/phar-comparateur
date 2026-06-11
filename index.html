@@ -1089,7 +1089,25 @@ async function readFile(f) {
   return new Promise((res,rej) => {
     const ext = f.name.split('.').pop().toLowerCase();
     if (ext==='csv'||ext==='txt') { const r=new FileReader();r.onload=e=>res(e.target.result);r.onerror=rej;r.readAsText(f,'UTF-8'); }
-    else if (ext==='xlsx'||ext==='xls') { const r=new FileReader();r.onload=e=>{const t=e.target.result.replace(/[^\x20-\x7E\n\r\t\u00C0-\u024F]/g,' ').replace(/\s{4,}/g,'\n').replace(/(\n\s*){3,}/g,'\n\n');res(`[Excel:${f.name}]\n${t.substring(0,10000)}`);};r.onerror=rej;r.readAsBinaryString(f); }
+    else if (ext==='xlsx'||ext==='xls') {
+      // Un .xlsx est une archive ZIP : il FAUT le parser avec SheetJS,
+      // sinon on n'obtient que du binaire illisible.
+      if (typeof XLSX === 'undefined') { rej(new Error('Librairie SheetJS non charg\u00E9e (v\u00E9rifiez la connexion).')); return; }
+      const r=new FileReader();
+      r.onload=e=>{
+        try {
+          const wb = XLSX.read(e.target.result, {type:'array'});
+          let out = `[Excel:${f.name}]\n`;
+          wb.SheetNames.forEach(sn=>{
+            const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sn], {FS:';', blankrows:false});
+            if (csv.trim()) out += `\n--- Feuille: ${sn} ---\n${csv}\n`;
+          });
+          res(out.substring(0,60000));
+        } catch(err) { rej(new Error(`Lecture Excel impossible (${f.name}) : ${err.message}`)); }
+      };
+      r.onerror=rej;
+      r.readAsArrayBuffer(f);
+    }
     else { const r=new FileReader();r.onload=e=>{const t=new TextDecoder('utf-8',{fatal:false}).decode(e.target.result).replace(/[^\x20-\x7E\n\r\t]/g,' ').replace(/\s{4,}/g,'\n');res(`[PDF:${f.name}]\n${t.substring(0,8000)}`);};r.onerror=rej;r.readAsArrayBuffer(f); }
   });
 }
