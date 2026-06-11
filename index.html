@@ -1102,7 +1102,7 @@ async function readFile(f) {
             const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sn], {FS:';', blankrows:false});
             if (csv.trim()) out += `\n--- Feuille: ${sn} ---\n${csv}\n`;
           });
-          res(out.substring(0,60000));
+          res(out.substring(0,250000)); // listes completes (Roduit ~1900 lignes) sans troncature
         } catch(err) { rej(new Error(`Lecture Excel impossible (${f.name}) : ${err.message}`)); }
       };
       r.onerror=rej;
@@ -1160,8 +1160,8 @@ function primPrompt(sups, texts, w, cur) {
   const hints = [];
   sups.forEach((s,i)=>{
     const id = String.fromCharCode(65+i), n = s.name;
-    if(/roduit/i.test(n)) hints.push(`   - ${id} (${n}) : le prix au kg correspond aux designations finissant par " NET".`);
-    if(/lgf|legu|riviera/i.test(n)) hints.push(`   - ${id} (${n}) : gagne surtout sur iceberg, rampon, gingembre, basilic, menthe, citronnelle ; verifie ces lignes de pres.`);
+    if(/roduit/i.test(n)) hints.push(`   - ${id} (${n}) : colonnes Code;Libelle;Prov.;Prix. Le prix au kg correspond aux libelles finissant par " NET" ; provenance deja en code (CH/FR/IT/ES).`);
+    if(/lgf|legu|riviera/i.test(n)) hints.push(`   - ${id} (${n}, Leguriviera) : colonnes Code;Designation;Origine;...;Unite;Prix. Fie-toi a la colonne Unite ("Kilo" = au kg). Origine en nom complet (Argentine, Hollande...). Gagne souvent sur iceberg, rampon, gingembre, basilic, menthe, citronnelle.`);
   });
   const hintBlock = hints.length ? `\n\nINDICES FOURNISSEURS (PHAR, a appliquer seulement si pertinent) :\n${hints.join('\n')}` : '';
   return `Tu es l'expert achats primeurs de PHAR (restauration professionnelle). Tu compares ${sups.length} fournisseurs article par article. La rigueur prime : un mauvais rapprochement (mauvais article, mauvaise origine, mauvaise unite) est une erreur grave.
@@ -1178,13 +1178,14 @@ ${artLines}
 1. MEME ARTICLE : ne rapproche que des references qui designent reellement le meme produit. Ne jamais inventer une equivalence. Si un fournisseur n'a pas l'article -> prix = null pour ce fournisseur ; gagnant = l'autre seulement s'il a un prix au kg valide.
 
 2. MEME UNITE : compare UNIQUEMENT au kilo (CHF/kg).
-   - Les designations finissant par PIECE, PCE, PAQUET, BOUQUET, BOTTE, SACHET, BATON = vendu a la piece/botte/etc. -> NON comparable au kg.
+   - PRIORITE a la colonne Unite si elle existe (certains fournisseurs en ont une) : "Kilo"/"kg" = comparable au kg ; toute autre valeur (Piece, Pce, Barq/Barquette, Sachet, Bocal, Corbeille, Botte, Bouquet, Paquet, Baton) = vendu a l'unite -> NON comparable au kg.
+   - A defaut de colonne Unite, lis la designation : un suffixe PIECE, PCE, PAQUET, BOUQUET, BOTTE, SACHET, BATON, BARQ, BOCAL = vendu a la piece/botte/etc. -> NON comparable au kg.
    - Si l'article est vendu a la piece/botte chez UN OU LES DEUX fournisseurs -> ne calcule PAS de gagnant : brut/net/origine = null des deux cotes, gagnant = null, et explique dans "remarque" (ex. "Vendu a la piece chez les deux fournisseurs - non comparable au kg"). Renseigne quand meme la designation reelle (champ "des") de chaque fournisseur.
 
 3. MEME ORIGINE - REGLE CENTRALE :
    - Compare en priorite des references de MEME origine. Si LGF et Roduit ont tous deux une origine CH ET tous deux une origine etrangere pour le meme article (ex. tomate grappe CH + tomate grappe etrangere chez chacun), produis DEUX lignes : "Tomate grappe (CH)" comparant les deux CH entre elles, et "Tomate grappe (import)" comparant les deux etrangeres entre elles.
    - Si les origines different et qu'il n'existe pas d'equivalent de meme origine (ex. LGF=CH seulement, Roduit=NL seulement) : tu PEUX indiquer le gagnant par prix net, MAIS tu DOIS le signaler dans "remarque" : "Origines differentes : CH (LGF) vs NL (Roduit)". Ne masque jamais une difference d'origine.
-   - Normalise : Suisse->CH, Hollande->NL, Espagne->ES, Italie->IT, France->FR, Chine->CN, Thailande->TH, Egypte->EG, Maroc->MA, Chili->CL. "Import"/"Etranger" sans pays -> "Import".
+   - Normalise (les fournisseurs ecrivent l'origine en code OU en nom complet) : Suisse/Suisse->CH, Hollande/Pays-Bas->NL, Espagne->ES, Italie->IT, France->FR, Argentine->AR, Chine->CN, Thailande->TH, Egypte->EG, Maroc->MA, Chili->CL, Perou->PE, Mexique->MX, Israel->IL. "Import"/"Etranger" sans pays -> "Import".
 
 4. PRIX NET = prix brut x (1 - ristourne/100). Arrondi a 2 decimales.
 
