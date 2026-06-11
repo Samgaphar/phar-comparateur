@@ -1548,8 +1548,11 @@ function exportPrimeursVaudoise(r) {
 
   // ───────── ONGLET 1 : COMPARATIF (N fournisseurs dynamiques) ─────────
   const COLS_PER_SUP = 4;                            // brut, net, origine, désignation
-  const nCols = 1 + sups.length*COLS_PER_SUP + 1;
-  const lastCol = nCols - 1;
+  const remCol  = 1 + sups.length*COLS_PER_SUP;      // colonne Remarques
+  const winCol  = remCol + 1;                        // colonne « Moins cher »
+  const nCols   = winCol + 1;
+  const lastCol = winCol;
+  const supIndex = {}; sups.forEach((f,si)=>supIndex[f.id]=si);
   const data = [];
   const styles = {}; // "r,c" -> style
   const merges = [];
@@ -1567,7 +1570,7 @@ function exportPrimeursVaudoise(r) {
   // En-têtes
   const hdr = ['Article'];
   sups.forEach(f=>{ hdr.push(`${nm[f.id]} – Prix brut\n(${cur}/kg)`,`${nm[f.id]} – Prix net\n(${cur}/kg)`,`${nm[f.id]} – Origine`,`${nm[f.id]} – Désignation`); });
-  hdr.push('Remarques');
+  hdr.push('Remarques','Moins cher');
   data.push(hdr);
   const hr = 2;
   setS(hr,0,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
@@ -1576,7 +1579,8 @@ function exportPrimeursVaudoise(r) {
     for(let k=0;k<COLS_PER_SUP;k++)
       setS(hr,base+k,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(dk),alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
   });
-  setS(hr,lastCol,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
+  setS(hr,remCol,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
+  setS(hr,winCol,{font:{bold:true,sz:9,color:{rgb:WHITE},name:'Calibri'},fill:fill(GREENWINF),alignment:{horizontal:'center',vertical:'center',wrapText:true},border:{bottom:{style:'thin',color:{rgb:'888888'}}}});
 
   // Regroupe par catégorie en respectant l'ordre d'apparition
   const cats = [];
@@ -1598,7 +1602,13 @@ function exportPrimeursVaudoise(r) {
         const p=l.prix?.[f.id]||{};
         row.push(num(p.brut), num(p.net), dash(p.origine), dash(p.des || l['noArticle'+f.id] || ''));
       });
-      row.push(l.remarque || l.alerte || '');
+      // Remarques + « Moins cher »
+      const rem = l.remarque || l.alerte || '';
+      let winLabel, winColor=null;
+      if(l.gagnant && nm[l.gagnant]){ winLabel = nm[l.gagnant]; winColor = hx(palOf(supIndex[l.gagnant]||0).dk); }
+      else if(l.gagnant==='egal'){ winLabel = 'Égal'; }
+      else { winLabel = 'Non comparable'; }
+      row.push(rem, winLabel);
       data.push(row);
       // article
       setS(ri,0,{font:{bold:true,sz:9,color:{rgb:INK},name:'Calibri'},alignment:{vertical:'center'},border:border()});
@@ -1615,17 +1625,77 @@ function exportPrimeursVaudoise(r) {
         setS(ri,base+3,{font:{sz:9,color:{rgb:INK},name:'Calibri'},fill:fill(bg),alignment:{horizontal:'left',vertical:'center'},border:border()});
       });
       // remarque
-      if(row[lastCol]) setS(ri,lastCol,{font:{italic:true,sz:8,color:{rgb:WARN},name:'Calibri'},fill:fill(WARNBG),alignment:{horizontal:'left',vertical:'center',wrapText:true},border:border()});
-      else setS(ri,lastCol,{border:border()});
+      if(rem) setS(ri,remCol,{font:{italic:true,sz:8,color:{rgb:WARN},name:'Calibri'},fill:fill(WARNBG),alignment:{horizontal:'left',vertical:'center',wrapText:true},border:border()});
+      else setS(ri,remCol,{border:border()});
+      // moins cher
+      setS(ri,winCol,{font:{bold:true,sz:9,color:{rgb:winColor||'6B6D82'},name:'Calibri'},fill:fill(winColor?GREENWIN:'F2EDE3'),alignment:{horizontal:'center',vertical:'center'},border:border()});
       ri++;
     });
   });
 
+  // ───────── RÉSUMÉ COMMANDE (côte à côte par fournisseur, comme la référence) ─────────
+  ri++; // ligne d'espacement
+  const SUMW = 5;                                    // Article, Brut, Net, Orig., Note
+  const sumWidth = Math.max(nCols, sups.length*SUMW);
+  data.push([`RÉSUMÉ COMMANDE – SEMAINE ${r.semaine}`]);
+  merges.push({s:{r:ri,c:0},e:{r:ri,c:sumWidth-1}});
+  setS(ri,0,{font:{bold:true,sz:12,color:{rgb:WHITE},name:'Calibri'},fill:fill(NAVY),alignment:{horizontal:'left',vertical:'center'}});
+  ri++;
+  // Bandeau « COMMANDER CHEZ … »
+  const bandRow = new Array(sumWidth).fill('');
+  sups.forEach((f,si)=>{ bandRow[si*SUMW] = `✔ COMMANDER CHEZ ${nm[f.id].toUpperCase()}`; });
+  data.push(bandRow);
+  sups.forEach((f,si)=>{
+    merges.push({s:{r:ri,c:si*SUMW},e:{r:ri,c:si*SUMW+SUMW-1}});
+    setS(ri,si*SUMW,{font:{bold:true,sz:10,color:{rgb:WHITE},name:'Calibri'},fill:fill(hx(palOf(si).dk)),alignment:{horizontal:'left',vertical:'center'}});
+  });
+  ri++;
+  // Sous-en-têtes
+  const subRow = new Array(sumWidth).fill('');
+  sups.forEach((f,si)=>{ ['Article','Brut','Net','Orig.','Note'].forEach((h,k)=>subRow[si*SUMW+k]=h); });
+  data.push(subRow);
+  sups.forEach((f,si)=>{ for(let k=0;k<SUMW;k++) setS(ri,si*SUMW+k,{font:{bold:true,sz:8,color:{rgb:INK},name:'Calibri'},fill:fill('EEF0FB'),alignment:{horizontal:k===0?'left':'center',vertical:'center'},border:{bottom:{style:'thin',color:{rgb:'B5BBF0'}}}}); });
+  ri++;
+  // Lignes gagnées, côte à côte
+  const wonBy = sups.map(f=>r.lignes.filter(l=>l.gagnant===f.id));
+  const maxLen = Math.max(1, ...wonBy.map(w=>w.length));
+  const noteOf = (l,f)=>{ const p=l.prix?.[f.id]||{}; return /origine|origin/i.test(l.remarque||'') ? `⚠ origine ${p.origine||''}`.trim() : ''; };
+  for(let k=0;k<maxLen;k++){
+    const row = new Array(sumWidth).fill('');
+    sups.forEach((f,si)=>{
+      const l = wonBy[si][k]; if(!l) return;
+      const p=l.prix?.[f.id]||{};
+      row[si*SUMW+0]=l.article;
+      row[si*SUMW+1]=p.brut!=null?parseFloat(p.brut):'—';
+      row[si*SUMW+2]=p.net!=null?parseFloat(p.net):'—';
+      row[si*SUMW+3]=p.origine||'—';
+      row[si*SUMW+4]=noteOf(l,f);
+    });
+    data.push(row);
+    sups.forEach((f,si)=>{
+      const l = wonBy[si][k]; if(!l) return;
+      const dk=hx(palOf(si).dk), bg=hx(palOf(si).bg);
+      setS(ri,si*SUMW+0,{font:{bold:true,sz:8,color:{rgb:INK},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'},border:border()});
+      setS(ri,si*SUMW+1,{font:{sz:8,color:{rgb:'6B6D82'},name:'Calibri'},numFmt:'#,##0.00',alignment:{horizontal:'right',vertical:'center'},border:border()});
+      setS(ri,si*SUMW+2,{font:{bold:true,sz:8,color:{rgb:dk},name:'Calibri'},fill:fill(bg),numFmt:'#,##0.00',alignment:{horizontal:'right',vertical:'center'},border:border()});
+      setS(ri,si*SUMW+3,{font:{sz:8,color:{rgb:INK},name:'Calibri'},alignment:{horizontal:'center',vertical:'center'},border:border()});
+      setS(ri,si*SUMW+4,{font:{italic:true,sz:7,color:{rgb:WARN},name:'Calibri'},alignment:{horizontal:'left',vertical:'center'},border:border()});
+    });
+    ri++;
+  }
+  // Légende
+  data.push([`LÉGENDE : Prix en ${cur}/kg — Brut = prix catalogue — Net = prix brut après ristourne — Prix net gagnant en vert — Articles vendus à la pièce/botte exclus de la comparaison au kg — ⚠ = origines différentes entre fournisseurs`]);
+  merges.push({s:{r:ri,c:0},e:{r:ri,c:sumWidth-1}});
+  setS(ri,0,{font:{italic:true,sz:8,color:{rgb:INK},name:'Calibri'},fill:fill('F2EDE3'),alignment:{horizontal:'left',vertical:'center',wrapText:true}});
+  ri++;
+
   const ws = XLSX.utils.aoa_to_sheet(data);
   ws['!merges'] = merges;
-  const cols = [{wch:26}];
-  sups.forEach(()=>cols.push({wch:11},{wch:11},{wch:9},{wch:30}));
-  cols.push({wch:42});
+  const widthMax = Math.max(nCols, sups.length*SUMW);
+  const cols = new Array(widthMax).fill(0).map(()=>({wch:12}));
+  cols[0] = {wch:26};
+  sups.forEach((_,si)=>{ const b=1+si*COLS_PER_SUP; cols[b]={wch:11};cols[b+1]={wch:11};cols[b+2]={wch:9};cols[b+3]={wch:30}; });
+  cols[remCol]={wch:40}; cols[winCol]={wch:14};
   ws['!cols'] = cols;
   ws['!rows'] = [{hpt:24},{hpt:16},{hpt:30}];
   // applique styles
