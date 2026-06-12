@@ -224,6 +224,13 @@ body::after{content:'';position:fixed;inset:0;background:radial-gradient(ellipse
 .sup-track::-webkit-scrollbar{height:3px;}
 .sup-track::-webkit-scrollbar-thumb{background:var(--ink-5);border-radius:3px;}
 
+/* DUPLICATE NOTICE */
+.dup-notice{display:flex;align-items:center;gap:10px;background:var(--warn-bg);border:1px solid #F0D080;border-radius:var(--r);padding:8px 14px;margin-bottom:10px;font-size:.82rem;color:var(--warn);}
+.dup-notice-ico{font-size:1rem;flex-shrink:0;}
+.dup-notice strong{font-weight:700;color:var(--ink-2);}
+.dup-notice-btn{margin-left:auto;flex-shrink:0;background:var(--warn);color:white;border:none;border-radius:6px;padding:5px 14px;font-family:var(--font-b);font-size:.76rem;font-weight:700;cursor:pointer;transition:opacity .15s;}
+.dup-notice-btn:hover{opacity:.85;}
+
 /* SUPPLIER CARD */
 .sup-card{min-width:265px;max-width:300px;flex:1;border-radius:var(--r-lg);border:1.5px solid;overflow:hidden;background:white;box-shadow:var(--sh-xs);transition:transform .2s,box-shadow .2s;position:relative;}
 .sup-card:hover{transform:translateY(-3px);box-shadow:var(--sh-md);}
@@ -966,6 +973,109 @@ const suppliers = { fish:[], prim:[] };
 const uploaded = {};
 const results = { fish:null, prim:null };
 
+// ══════════════════════════════════════════════════════════
+//  BASE FOURNISSEURS PERSISTANTE (rabais / ristourne)
+//  Stockée en localStorage : nom + ristourne + rabais par onglet.
+//  Les fichiers de prix (File) ne sont pas persistables → à recharger.
+// ══════════════════════════════════════════════════════════
+const CMP_SUP_KEY = 'phar_cmp_suppliers_v1';
+
+function saveSupBase() {
+  try {
+    // On ne sauve que les champs « base » (pas les File objects)
+    const base = {};
+    Object.keys(suppliers).forEach(tab => {
+      base[tab] = suppliers[tab].map(s => ({
+        name: s.name || '',
+        ristourne: parseFloat(s.ristourne) || 0,
+        rabais: parseFloat(s.rabais) || 0
+      }));
+    });
+    localStorage.setItem(CMP_SUP_KEY, JSON.stringify(base));
+  } catch(e) { console.warn('Sauvegarde base fournisseurs impossible :', e); }
+}
+
+function loadSupBase() {
+  try {
+    const raw = localStorage.getItem(CMP_SUP_KEY);
+    if (!raw) return null;
+    const b = JSON.parse(raw);
+    if (!b || typeof b !== 'object') return null;
+    return b;
+  } catch(e) { console.warn('Lecture base fournisseurs impossible :', e); return null; }
+}
+
+// ── Normalisation des noms + alias connus (pour détecter les doublons) ──
+function normSupName(name) {
+  return (name||'')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g,'') // retire les accents
+    .replace(/[^a-z0-9]+/g,' ')                       // ponctuation → espace
+    .trim();
+}
+// Plusieurs écritures = un même fournisseur. Clé canonique partagée.
+const SUP_ALIASES = [
+  { key:'lgf',    match:['lgf','leguriviera','legu riviera','leguri','legumes riviera','legumes de riviera'] },
+  { key:'roduit', match:['roduit','roduit sa','roduit primeurs'] },
+];
+function supCanonicalKey(name) {
+  const n = normSupName(name);
+  if (!n) return '';
+  for (const a of SUP_ALIASES) {
+    if (a.match.some(m => n === m || n.includes(m))) return a.key;
+  }
+  return n;
+}
+
+// ── Détection des doublons dans la base d'un onglet ──
+function findDuplicateSups(tab) {
+  const groups = {};
+  suppliers[tab].forEach((s, i) => {
+    const k = supCanonicalKey(s.name);
+    if (!k) return;
+    (groups[k] = groups[k] || []).push(i);
+  });
+  return Object.values(groups).filter(idxs => idxs.length > 1);
+}
+
+// ── Fusion : on garde la 1re fiche, on récupère ses meilleures valeurs ──
+function mergeDuplicateSups(tab) {
+  const dups = findDuplicateSups(tab);
+  if (!dups.length) return false;
+  // On retire de la fin vers le début pour ne pas décaler les index
+  const toRemove = [];
+  dups.forEach(idxs => {
+    const keep = idxs[0];
+    idxs.slice(1).forEach(j => {
+      const a = suppliers[tab][keep], b = suppliers[tab][j];
+      // Valeurs : on garde la valeur non nulle si la fiche conservée est à 0
+      if ((!a.ristourne || a.ristourne===0) && b.ristourne) a.ristourne = b.ristourne;
+      if ((!a.rabais   || a.rabais===0)   && b.rabais)   a.rabais   = b.rabais;
+      // Fichier chargé : on transfère celui du doublon si la fiche conservée n'en a pas
+      if (!uploaded[`${tab}-${keep}`] && uploaded[`${tab}-${j}`]) {
+        uploaded[`${tab}-${keep}`] = uploaded[`${tab}-${j}`];
+      }
+      toRemove.push(j);
+    });
+  });
+  // Supprime les doublons (index décroissants) en réindexant `uploaded`
+  toRemove.sort((x,y)=>y-x).forEach(idx => {
+    suppliers[tab].splice(idx, 1);
+    const nu = {};
+    Object.entries(uploaded).forEach(([k,v]) => {
+      const [t,ii] = k.split('-'); const n = parseInt(ii);
+      if (t !== tab) { nu[k]=v; return; }
+      if (n === idx) return;
+      nu[`${t}-${n>idx?n-1:n}`] = v;
+    });
+    Object.keys(uploaded).forEach(k => { if (k.startsWith(tab+'-')) delete uploaded[k]; });
+    Object.assign(uploaded, nu);
+  });
+  saveSupBase();
+  renderSups(tab);
+  return true;
+}
+
 function initials(name) {
   const p = name.trim().split(/\s+/);
   return p.length >= 2 ? (p[0][0]+p[1][0]).toUpperCase() : name.slice(0,2).toUpperCase();
@@ -1010,11 +1120,11 @@ function renderSups(tab) {
         <div class="cond-row">
           <div class="cond-item"><label>Ristourne %</label>
             <input type="number" value="${sup.ristourne||0}" min="0" max="50" step="0.5"
-              oninput="suppliers['${tab}'][${i}].ristourne=parseFloat(this.value)||0"/>
+              oninput="suppliers['${tab}'][${i}].ristourne=parseFloat(this.value)||0;saveSupBase()"/>
           </div>
           <div class="cond-item"><label>Rabais supp. %</label>
             <input type="number" value="${sup.rabais||0}" min="0" max="50" step="0.5"
-              oninput="suppliers['${tab}'][${i}].rabais=parseFloat(this.value)||0"/>
+              oninput="suppliers['${tab}'][${i}].rabais=parseFloat(this.value)||0;saveSupBase()"/>
           </div>
         </div>
         <div class="${uzClass}" id="uz-${tab}-${i}" style="${file?'border-color:'+col.bd:''}">
@@ -1024,6 +1134,33 @@ function renderSups(tab) {
       </div>`;
     track.insertBefore(card, addBtn);
   });
+  refreshDupNotice(tab);
+}
+
+// ── Bandeau « doublons détectés » au-dessus du track ──
+function refreshDupNotice(tab) {
+  const track = document.getElementById('sup-track-' + tab);
+  if (!track) return;
+  const noticeId = 'dup-notice-' + tab;
+  let notice = document.getElementById(noticeId);
+  const dups = findDuplicateSups(tab);
+  if (!dups.length) { if (notice) notice.remove(); return; }
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.id = noticeId;
+    notice.className = 'dup-notice';
+    track.parentNode.insertBefore(notice, track);
+  }
+  const noms = dups.map(idxs => idxs.map(j => suppliers[tab][j].name || 'Fournisseur '+(j+1)).join(' / ')).join(' · ');
+  notice.innerHTML = `<span class="dup-notice-ico">⚠</span>
+    <span>Doublon possible&nbsp;: <strong>${noms}</strong> désignent peut-être le même fournisseur.</span>
+    <button class="dup-notice-btn" onclick="onMergeDuplicates('${tab}')">Fusionner</button>`;
+}
+
+function onMergeDuplicates(tab) {
+  if (mergeDuplicateSups(tab)) {
+    if (typeof showToast === 'function') showToast('Fournisseurs en double fusionnés', 'success');
+  }
 }
 
 // ⚠ KEY FIX: update name + avatar in-place, no DOM rebuild
@@ -1036,12 +1173,15 @@ function updateSupName(inp) {
   const avEl = document.getElementById(`av-${tab}-${idx}`);
   if (nmEl) nmEl.textContent = displayName;
   if (avEl) avEl.textContent = initials(displayName);
+  saveSupBase();
+  refreshDupNotice(tab);
 }
 
 function addSupplier(tab) {
   if (suppliers[tab].length >= 8) { alert('Maximum 8 fournisseurs.'); return; }
   const defs = { fish:['Fournisseur A','Fournisseur B','Fournisseur C','Fournisseur D'], prim:['LGF','Roduit','Vert-Bois','Agri-Pro'] };
   suppliers[tab].push({ name:defs[tab][suppliers[tab].length]||'Fournisseur '+(suppliers[tab].length+1), ristourne:0, rabais:0 });
+  saveSupBase();
   renderSups(tab);
 }
 
@@ -1057,6 +1197,7 @@ function removeSup(tab, idx) {
   });
   Object.keys(uploaded).forEach(k => delete uploaded[k]);
   Object.assign(uploaded, nu);
+  saveSupBase();
   renderSups(tab);
 }
 
@@ -1075,11 +1216,29 @@ function handleUpload(inp, tab, idx) {
   }
 }
 
-// Init suppliers
-addSupplier('fish'); addSupplier('fish');
-addSupplier('prim'); addSupplier('prim');
-suppliers.prim[0].name = 'LGF'; suppliers.prim[1].name = 'Roduit';
-renderSups('fish'); renderSups('prim');
+// Init suppliers — depuis la base persistée si disponible, sinon valeurs par défaut
+(function initSuppliers() {
+  const saved = loadSupBase();
+  const hasSaved = saved && (Array.isArray(saved.fish) && saved.fish.length || Array.isArray(saved.prim) && saved.prim.length);
+  if (hasSaved) {
+    ['fish','prim'].forEach(tab => {
+      const arr = Array.isArray(saved[tab]) ? saved[tab] : [];
+      suppliers[tab] = arr.length ? arr.map(s => ({
+        name: s.name || '',
+        ristourne: parseFloat(s.ristourne) || 0,
+        rabais: parseFloat(s.rabais) || 0
+      })) : [];
+    });
+    // Garantit le minimum de 2 fournisseurs par onglet
+    ['fish','prim'].forEach(tab => { while (suppliers[tab].length < 2) addSupplier(tab); });
+  } else {
+    addSupplier('fish'); addSupplier('fish');
+    addSupplier('prim'); addSupplier('prim');
+    suppliers.prim[0].name = 'LGF'; suppliers.prim[1].name = 'Roduit';
+    saveSupBase();
+  }
+  renderSups('fish'); renderSups('prim');
+})();
 
 // Init primeurs (après déclaration des const PRIM_DB / selectedPrim)
 buildPrimDropdown(); renderPrimTags();
@@ -1110,6 +1269,28 @@ async function readFile(f) {
     }
     else { const r=new FileReader();r.onload=e=>{const t=new TextDecoder('utf-8',{fatal:false}).decode(e.target.result).replace(/[^\x20-\x7E\n\r\t]/g,' ').replace(/\s{4,}/g,'\n');res(`[PDF:${f.name}]\n${t.substring(0,8000)}`);};r.onerror=rej;r.readAsArrayBuffer(f); }
   });
+}
+
+// ── DÉDOUBLONNAGE DÉTERMINISTE DES LIGNES ──
+// Retire les lignes de données STRICTEMENT identiques (même code, même
+// désignation, même prix) qui se répètent dans une liste fournisseur.
+// Purement mécanique : on ne fusionne JAMAIS deux lignes différentes,
+// on ne supprime qu'un duplicata exact → conforme à « ne pas inventer ».
+function dedupRows(text) {
+  if (!text) return { text, removed: 0 };
+  const lines = text.split(/\r?\n/);
+  const seen = new Set();
+  let removed = 0;
+  const out = lines.filter(line => {
+    const t = line.trim();
+    // Lignes structurelles (en-têtes de feuille, balises, vides) : toujours gardées
+    if (!t || !t.includes(';') || t.startsWith('---') || t.startsWith('[Excel') || t.startsWith('[PDF')) return true;
+    const key = t.toLowerCase().replace(/\s+/g,' ');
+    if (seen.has(key)) { removed++; return false; }
+    seen.add(key);
+    return true;
+  });
+  return { text: out.join('\n'), removed };
 }
 
 // ── PROMPTS ──
@@ -1197,6 +1378,8 @@ ${artLines}
 
 8. Pour chaque fournisseur et chaque ligne : extrais le N de reference/code article (noArticleA, noArticleB...), l'origine, et la designation EXACTE telle qu'ecrite chez le fournisseur (champ "des"). "N/D" si absent.
 
+9. DOUBLONS INTERNES A UN FOURNISSEUR : un meme fournisseur peut lister plusieurs fois le meme article (conditionnements, libelles brut/NET...). Pour un article+origine donne, retiens UNE SEULE reference par fournisseur : celle vendue au kg (libelle " NET" chez Roduit, unite "Kilo" chez LGF). Ne cree pas plusieurs lignes de comparaison a partir de doublons internes d'un meme fournisseur. Ne produis des lignes distinctes que pour des origines reellement differentes (regle 3).
+
 DONNEES BRUTES DES FOURNISSEURS :
 
 ${db}
@@ -1226,7 +1409,11 @@ async function runAnalysis(tab) {
   document.getElementById('res-'+tab).classList.remove('on');
 
   try {
-    const texts = await Promise.all(sups.map((_,i)=>readFile(uploaded[`${tab}-${i}`])));
+    const rawTexts = await Promise.all(sups.map((_,i)=>readFile(uploaded[`${tab}-${i}`])));
+    // Dédoublonnage déterministe : retire les lignes strictement identiques
+    let totalRemoved = 0;
+    const texts = rawTexts.map(t => { const d = dedupRows(t); totalRemoved += d.removed; return d.text; });
+    if (totalRemoved > 0) console.info(`Dédoublonnage : ${totalRemoved} ligne(s) en double retirée(s) avant analyse.`);
     const prompt = isF
       ? fishPrompt(sups, texts, w, cur)
       : primPrompt(sups, texts, w, cur);
